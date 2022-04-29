@@ -63,38 +63,46 @@ const miscFields = [
   },
 ]
 
-const addItem = (fields) => fields.push({ unitPrice: 1, quantity: 1.0, extendedPrice: 1.0 });
+const addItem = (fields) => fields.push({ unitPrice: 1, quantity: 1.0 });
 const removeItem = (fields, index) => fields.remove(index);
 
 const calculator = createDecorator(
   {
-    field: /(artFee|certFee|expediteFee|taxes|shipping|invoiceItems.*)/, // when a field matching this pattern changes...
-    updates: { // update the field below:
+    // When artFee, certFee, expeditedFee, taxes, shipping, or subTotal is updated...
+    field: /(artFee|certFee|expediteFee|taxes|shipping|subTotal)/,
+    updates: {
+      // ...update the total field
       total: (unusedValue, allValues) => (
         Number(allValues.artFee || 0) +
         Number(allValues.certFee || 0) +
         Number(allValues.expediteFee || 0) +
         Number(allValues.taxes || 0) +
         Number(allValues.shipping || 0) +
-        (allValues.invoiceItems.map(i => i.quantity * i.unitPrice) || []).reduce(
+        (allValues.invoiceItems.map(i => (i.quantity || 0) * (i.unitPrice || 0)) || []).reduce(
           (sum, value) => sum + value, 0
         )
       )
     }
   },
   {
-    field: /(invoiceItems.*)/, // when a field matching this pattern changes...
-    updates: { // update the field below:
-      subTotal: (unusedValue, allValues) => (
-        (allValues.invoiceItems.map(i => i.quantity * i.unitPrice) || []).reduce(
-          (sum, value) => sum + value, 0
+    // When any invoiceItem quantity or unit price is updated...
+    field: /(invoiceItems.*)/,
+    updates: {
+      // ...update the subtotal field
+      // -- Note: Since we're updating subTotal, and subTotal is a trigger for the above calc,
+      //          the above calc will run and update the total field
+      subTotal: (unusedValue, allValues) =>  (
+        (allValues.invoiceItems.map(i => (i.quantity || 0) * (i.unitPrice || 0)) || []).reduce(
+          (sum, value) => sum + (value ?? 0), 0
         )
       )
     }
   },
   {
-    field: /(artFee|certFee|expediteFee)/, // when a field matching this pattern changes...
-    updates: { // update the field below:
+    // When artFee, certFee, or expediteFee is updated...
+    field: /(artFee|certFee|expediteFee)/,
+    updates: { 
+      // ...update the feesTotal field
       feesTotal: (unusedValue, allValues) => (
         Number(allValues.artFee || 0) +
         Number(allValues.certFee || 0) +
@@ -103,8 +111,12 @@ const calculator = createDecorator(
     }
   },
   {
-    field: /total/, // when a field matching this pattern changes...
+    // When total is updated...
+    field: /total/,
     updates: (value, name, allValues, prevValues) => {
+      // ...update the oldTotal field
+      // -- Note: In this example, we're manually defining the target field to be updated
+      //          and setting the calculated value
       const oldTotal = "oldTotal";
       const oldTotalValue = prevValues.total ?? 0;
       return {
@@ -113,8 +125,10 @@ const calculator = createDecorator(
     }
   },
   {
+    // When total is updated...
     field: 'total',
     updates: {
+      // ...update the howExpensive field
       howExpensive: (unusedValue, allValues) => {
         if (allValues.total > 10000) return "Too expensive";
         if (allValues.total > 1000) return "Fairly expensive";
@@ -139,7 +153,7 @@ export const App = () => {
           shipping: 0,
           invoiceItems: [{ quantity: 10, unitPrice: 5.00 }],
         }}
-        decorators={[calculator]}
+        decorators={[calculator]} // <- this is the calculator we defined above
         mutators={{ ...arrayMutators }}
         render={({ handleSubmit }) => (
           <SemanticForm onSubmit={handleSubmit}>
