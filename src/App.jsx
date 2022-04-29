@@ -12,63 +12,85 @@ const miscFields = [
     display: "Sub Total",
     name: "subTotal",
     type: "number",
+    formatOnBlur: false,
   },
   {
     component: "input",
     display: "Art Feel",
     name: "artFee",
     type: "number",
+    formatOnBlur: true,
   },
   {
     component: "input",
     display: "Cert Fee",
     name: "certFee",
     type: "number",
+    formatOnBlur: true,
   },
   {
     component: "input",
     display: "Expedite Fee",
     name: "expediteFee",
     type: "number",
+    formatOnBlur: true,
   },
   {
     component: "input",
     display: "Fees Total",
     name: "feesTotal",
     type: "number",
+    formatOnBlur: false,
   },
   {
     component: "input",
     display: "Taxes",
     name: "taxes",
     type: "number",
+    formatOnBlur: true,
   },
   {
     component: "input",
     display: "Shipping",
     name: "shipping",
     type: "number",
+    formatOnBlur: true,
   },
   {
     component: "input",
     display: "Total",
     name: "total",
     type: "number",
+    formatOnBlur: false,
   },
   {
     component: "input",
     display: "Old Total",
     name: "oldTotal",
     type: "number",
+    formatOnBlur: false,
   },
 ]
 
-const addItem = (fields) => fields.push({ unitPrice: 1, quantity: 1.0 });
+const addItem = (fields) => fields.push({ unitPrice: 1, quantity: 1.0, extendedPrice: 1.0 });
+
 const removeItem = (fields, index) => fields.remove(index);
 
+const getIndexOfInvoiceItems = (name) => {
+  const extractIndex = /invoiceItems\[(\d+)\]/gm;
+  let m;
+  while ((m = extractIndex.exec(name)) !== null) {
+    // This is necessary to avoid infinite loops with zero-width matches
+    if (m.index === extractIndex.lastIndex) {
+      extractIndex.lastIndex++;
+    }
+
+    return m[1];
+}
+}
+
 const calculator = createDecorator(
-  {
-    // When artFee, certFee, expeditedFee, taxes, shipping, or subTotal is updated...
+  { // When artFee, certFee, expeditedFee, taxes, shipping, or subTotal is updated...
     field: /(artFee|certFee|expediteFee|taxes|shipping|subTotal)/,
     updates: {
       // ...update the total field
@@ -84,8 +106,26 @@ const calculator = createDecorator(
       )
     }
   },
-  {
-    // When any invoiceItem quantity or unit price is updated...
+  { // When the quantity or unitPrice of an invoiceItem is updated...
+    field: /invoiceItems\[\d+\].quantity|invoiceItems\[\d+\].unitPrice/,
+    updates: (value, name, allValues) => {  
+      // ...update the extendedPrice field for that item
+      const index = Number(getIndexOfInvoiceItems(name));
+      const itemExtPriceField = name.includes('quantity') ?
+        name.replace('quantity', 'extendedPrice') : 
+        name.replace('unitPrice', 'extendedPrice');
+      try {
+        const itemExtPriceValue = (
+          (allValues.invoiceItems[index].quantity || 0) *
+          (allValues.invoiceItems[index].unitPrice || 0)
+        );
+        return { [itemExtPriceField]: itemExtPriceValue };
+      } catch (e) {
+        console.error(`Could not find item for invoiceItems at index: ${index}.`);
+      }      
+    }
+  },
+  { // When any invoiceItem quantity or unit price is updated...
     field: /(invoiceItems.*)/,
     updates: {
       // ...update the subtotal field
@@ -98,8 +138,7 @@ const calculator = createDecorator(
       )
     }
   },
-  {
-    // When artFee, certFee, or expediteFee is updated...
+  { // When artFee, certFee, or expediteFee is updated...
     field: /(artFee|certFee|expediteFee)/,
     updates: { 
       // ...update the feesTotal field
@@ -110,8 +149,7 @@ const calculator = createDecorator(
       )
     }
   },
-  {
-    // When total is updated...
+  { // When total is updated...
     field: /total/,
     updates: (value, name, allValues, prevValues) => {
       // ...update the oldTotal field
@@ -124,8 +162,7 @@ const calculator = createDecorator(
       };
     }
   },
-  {
-    // When total is updated...
+  { // When total is updated...
     field: 'total',
     updates: {
       // ...update the howExpensive field
@@ -151,7 +188,7 @@ export const App = () => {
           expediteFee: 0,
           taxes: 0,
           shipping: 0,
-          invoiceItems: [{ quantity: 10, unitPrice: 5.00 }],
+          invoiceItems: [{ quantity: 10, unitPrice: 5.00, extendedPrice: 50.00 }],
         }}
         decorators={[calculator]} // <- this is the calculator we defined above
         mutators={{ ...arrayMutators }}
@@ -177,6 +214,8 @@ export const App = () => {
                               name={`${name}.quantity`}
                               component="input"
                               type="number"
+                              formatOnBlur
+                              format={(v) => Number(v).toFixed(0)}
                             />
                           </Table.Cell>
                           <Table.Cell>
@@ -184,13 +223,16 @@ export const App = () => {
                               name={`${name}.unitPrice`}
                               component="input"
                               type="number"
+                              formatOnBlur
+                              format={(v) => Number(v).toFixed(2)}
                             />
                           </Table.Cell>
                           <Table.Cell>
-                          {
-                            (Number(fields.value[index].quantity || 0) *
-                            Number(fields.value[index].unitPrice || 0)).toFixed(2)
-                          }
+                            <FinalFormField
+                              name={`${name}.extendedPrice`}
+                              component="input"
+                              format={(v) => Number(v).toFixed(2)}
+                            />
                           </Table.Cell>
                           <Table.Cell>
                             {fields.length !== 1 && (
@@ -241,6 +283,8 @@ export const App = () => {
                           name={f.name}
                           component={f.component}
                           type={f.type}
+                          formatOnBlur={f.formatOnBlur}
+                          format={(v) => Number(v).toFixed(2)}
                         />
                       </Table.Cell>
                     </Table.Row>
