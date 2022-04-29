@@ -63,6 +63,9 @@ const miscFields = [
   },
 ]
 
+const addItem = (fields) => fields.push({ unitPrice: 1, quantity: 1.0, extendedPrice: 1.0 });
+const removeItem = (fields, index) => fields.remove(index);
+
 const calculator = createDecorator(
   {
     field: /(artFee|certFee|expediteFee|taxes|shipping|invoiceItems.*)/, // when a field matching this pattern changes...
@@ -109,6 +112,17 @@ const calculator = createDecorator(
       };
     }
   },
+  {
+    field: 'total',
+    updates: {
+      howExpensive: (unusedValue, allValues) => {
+        if (allValues.total > 10000) return "Too expensive";
+        if (allValues.total > 1000) return "Fairly expensive";
+        if (allValues.total >= 100) return "A little expensive";
+        if (allValues.total < 100) return "It's doable";
+      }
+    }
+  }
 );
 
 export const App = () => {
@@ -168,7 +182,7 @@ export const App = () => {
                             {fields.length !== 1 && (
                               <Button
                                 type="button"
-                                onClick={() => fields.remove(index)}
+                                onClick={() => removeItem(fields, index)}
                               >
                                 Remove
                               </Button>
@@ -185,9 +199,7 @@ export const App = () => {
                       <Table.Cell>
                         <Button
                           type="button"
-                          onClick={() =>
-                            fields.push({ unitPrice: 1, quantity: 1.0, extendedPrice: 1.0 })
-                          }
+                          onClick={() => addItem(fields)}
                           primary
                         >
                           Add Item
@@ -220,11 +232,21 @@ export const App = () => {
                     </Table.Row>
                   ))
                 }
+                <Table.Row>
+                  <Table.Cell>How expensive is it?</Table.Cell>
+                  <Table.Cell>
+                    <FinalFormField
+                      name="howExpensive"
+                      component="input"
+                      type="text"
+                    />
+                  </Table.Cell>
+                </Table.Row>
               </Table.Body>
               <Table.Footer>
                 <Table.Row>
                   <Table.Cell>
-                    <Button>
+                    <Button type="submit">
                       Submit
                     </Button>
                   </Table.Cell>
